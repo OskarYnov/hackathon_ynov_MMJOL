@@ -138,9 +138,8 @@
 ```
 techcorp-ai-chat/
 ├── tritton_server/              # Configuration Triton Inference Server
-├── phi_financial_model/         # Modèle Phi-3.5-Financial
+├── models/         # Modèle Phi-3.5-Financial
 ├── medical_dataset/            # Dataset pour fine-tuning médical expérimental
-├── web_interface/              # Interface React/Node.js (non finalisée)
 ├── scripts/                    # Scripts d'entraînement et de tests
 
 
