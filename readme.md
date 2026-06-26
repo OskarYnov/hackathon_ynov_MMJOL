@@ -134,6 +134,10 @@
 
 ## 🛠️ RESSOURCES TECHNIQUES FOURNIES
 
+### 📦 **Datasets**
+- **Dataset financier (v0 brut)** : [Dipl0/financial_dataset.json](https://huggingface.co/datasets/Dipl0/financial_dataset.json) — à télécharger manuellement dans `datasets/`
+- **Dataset médical** : [ruslanmv/ai-medical-chatbot](https://huggingface.co/datasets/ruslanmv/ai-medical-chatbot)
+
 ### 📁 **Architecture du Projet**
 ```
 techcorp-ai-chat/
