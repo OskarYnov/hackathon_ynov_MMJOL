@@ -1,0 +1,11 @@
+FROM ./models/phi3-financial-f16.gguf
+
+TEMPLATE """<|user|>
+{{ .Prompt }}<|end|>
+<|assistant|>
+{{ .Response }}<|end|>
+"""
+
+PARAMETER stop "<|end|>"
+PARAMETER stop "<|user|>"
+PARAMETER stop "<|assistant|>"

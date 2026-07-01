@@ -1,2 +1,6 @@
 datasets/dataset_v0.json
 .DS_Store
+models/phi3-financial-f16.gguf
+models/phi3_financial_merged/
+venv/
+llama.cpp/
