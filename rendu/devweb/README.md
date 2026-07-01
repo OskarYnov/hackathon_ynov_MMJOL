@@ -48,4 +48,4 @@ Merci à **Maxime Pescay** pour sa participation au groupe.
 Les personnes suivantes, initialement assignées au groupe, n'ont jamais
 participé au projet : Maxime Desportes, Léa Lemos Barrau, Julien Fromont.
 
-C'est pour cela que j'ai moi même fait la mise en place de l'IA et le serveur en local pour pouvoir dév et push tout ça et avoir un rendu un minimum potable. 
+Je n'ai pas fait l'IA moi même ni la data, j'ai pris un modèle de base qui me donne des infos sur des actions ou des entreprises. L'interface et fonctionnelle, le chat avec la réponse via le LLM aussi. J'estime avoir fait plus que demandé pour le devweb
