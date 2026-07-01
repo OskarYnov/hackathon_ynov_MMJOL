@@ -47,3 +47,5 @@ Merci à **Maxime Pescay** pour sa participation au groupe.
 
 Les personnes suivantes, initialement assignées au groupe, n'ont jamais
 participé au projet : Maxime Desportes, Léa Lemos Barrau, Julien Fromont.
+
+C'est pour cela que j'ai moi même fait la mise en place de l'IA et le serveur en local pour pouvoir dév et push tout ça et avoir un rendu un minimum potable. 
