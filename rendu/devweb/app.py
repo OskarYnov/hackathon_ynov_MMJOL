@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """TechCorp Financial Assistant - Dev Web interface.
 
-Parle a un vrai serveur Ollama en local (http://localhost:11434 par defaut).
-Si Ollama n'est pas joignable, bascule automatiquement sur des reponses
-stub pour ne jamais casser la demo.
+Parle a un serveur Ollama, local ou distant (tunnel ngrok cote INFRA).
+Si le serveur choisi n'est pas joignable, bascule automatiquement sur des
+reponses stub pour ne jamais casser la demo, et remonte l'erreur reelle
+pour pouvoir diagnostiquer.
 """
 
 import os
@@ -15,8 +16,24 @@ from flask import Flask, jsonify, render_template, request
 
 app = Flask(__name__)
 
-OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://localhost:11434")
-OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "techcorp-financial")
+TARGETS = {
+    "local": {
+        "label": "Local",
+        "url": os.environ.get("OLLAMA_LOCAL_URL", "http://localhost:11434"),
+        "model": os.environ.get("OLLAMA_LOCAL_MODEL", "techcorp-financial"),
+    },
+    "remote": {
+        "label": "Distant (INFRA / ngrok)",
+        "url": os.environ.get("OLLAMA_REMOTE_URL", "https://turbojet-deviant-reshape.ngrok-free.dev"),
+        "model": os.environ.get("OLLAMA_REMOTE_MODEL", "phi3-financial"),
+    },
+}
+
+# Cible active par defaut (modifiable en live depuis le panneau de gauche)
+current_target = os.environ.get("OLLAMA_TARGET", "local")
+if current_target not in TARGETS:
+    current_target = "local"
+
 OLLAMA_TIMEOUT = 30
 
 STUB_REPLIES = [
@@ -28,16 +45,31 @@ STUB_REPLIES = [
 ]
 
 
+def active():
+    return TARGETS[current_target]
+
+
 def ping_ollama():
-    """Verifie que le serveur Ollama repond et que le modele est disponible."""
+    """Verifie que le serveur Ollama actif repond et que le modele est disponible.
+
+    Retourne (server_up, model_ready, error_message).
+    """
+    target = active()
     try:
-        res = requests.get(f"{OLLAMA_URL}/api/tags", timeout=3)
+        res = requests.get(f"{target['url']}/api/tags", timeout=5)
         res.raise_for_status()
         models = [m["name"] for m in res.json().get("models", [])]
-        model_ready = any(m.split(":")[0] == OLLAMA_MODEL.split(":")[0] for m in models)
-        return True, model_ready
-    except requests.RequestException:
-        return False, False
+        model_ready = any(m.split(":")[0] == target["model"].split(":")[0] for m in models)
+        error = None if model_ready else f"Modele '{target['model']}' introuvable sur ce serveur"
+        return True, model_ready, error
+    except requests.exceptions.Timeout:
+        return False, False, "Timeout : le serveur ne repond pas"
+    except requests.exceptions.ConnectionError as e:
+        return False, False, f"Connexion impossible : {e}"
+    except requests.exceptions.HTTPError as e:
+        return False, False, f"Erreur HTTP {e.response.status_code} : {e.response.text[:200]}"
+    except requests.RequestException as e:
+        return False, False, str(e)
 
 
 def stub_reply(message):
@@ -47,12 +79,13 @@ def stub_reply(message):
 
 def ollama_reply(history):
     """Appelle l'API /api/chat d'Ollama avec l'historique de conversation."""
+    target = active()
     payload = {
-        "model": OLLAMA_MODEL,
+        "model": target["model"],
         "messages": history,
         "stream": False,
     }
-    res = requests.post(f"{OLLAMA_URL}/api/chat", json=payload, timeout=OLLAMA_TIMEOUT)
+    res = requests.post(f"{target['url']}/api/chat", json=payload, timeout=OLLAMA_TIMEOUT)
     res.raise_for_status()
     return res.json()["message"]["content"].strip()
 
@@ -62,14 +95,41 @@ def index():
     return render_template("index.html")
 
 
+@app.route("/api/config")
+def get_config():
+    return jsonify({
+        "current": current_target,
+        "targets": {
+            key: {"label": t["label"], "url": t["url"], "model": t["model"]}
+            for key, t in TARGETS.items()
+        },
+    })
+
+
+@app.route("/api/config", methods=["POST"])
+def set_config():
+    global current_target
+    data = request.get_json(force=True, silent=True) or {}
+    target = data.get("target")
+    if target not in TARGETS:
+        return jsonify({"error": f"cible inconnue: {target}"}), 400
+    current_target = target
+    return jsonify({"current": current_target})
+
+
 @app.route("/api/status")
 def status():
-    server_up, model_ready = ping_ollama()
+    server_up, model_ready, error = ping_ollama()
+    target = active()
     return jsonify({
         "connected": server_up and model_ready,
-        "backend": "ollama" if server_up else "stub",
-        "model": OLLAMA_MODEL,
+        "backend": "ollama" if server_up and model_ready else "stub",
+        "target": current_target,
+        "label": target["label"],
+        "url": target["url"],
+        "model": target["model"],
         "model_ready": model_ready,
+        "error": error,
     })
 
 
@@ -82,7 +142,7 @@ def chat():
     if not message:
         return jsonify({"error": "empty message"}), 400
 
-    server_up, model_ready = ping_ollama()
+    server_up, model_ready, error = ping_ollama()
 
     if server_up and model_ready:
         try:
@@ -90,12 +150,17 @@ def chat():
             messages.append({"role": "user", "content": message})
             reply = ollama_reply(messages)
             return jsonify({"reply": reply, "connected": True, "backend": "ollama"})
-        except requests.RequestException:
-            pass
+        except requests.RequestException as e:
+            error = str(e)
 
-    # Fallback stub si Ollama n'est pas joignable ou en erreur
+    # Fallback stub si le serveur choisi n'est pas joignable ou en erreur
     reply = stub_reply(message)
-    return jsonify({"reply": reply, "connected": server_up and model_ready, "backend": "stub"})
+    return jsonify({
+        "reply": reply,
+        "connected": False,
+        "backend": "stub",
+        "error": error,
+    })
 
 
 if __name__ == "__main__":

@@ -5,15 +5,15 @@ const chatInput = document.getElementById("chat-input");
 const sendBtn = document.getElementById("send-btn");
 const statusDot = document.getElementById("status-dot");
 const statusText = document.getElementById("status-text");
+const targetsList = document.getElementById("targets-list");
+const testBtn = document.getElementById("test-btn");
+const testResult = document.getElementById("test-result");
 
 const history = [];
+let currentTarget = null;
 
 function scrollToBottom() {
   chatScroll.scrollTop = chatScroll.scrollHeight;
-}
-
-function timeNow() {
-  return new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
 }
 
 function renderMessage(role, text) {
@@ -67,8 +67,67 @@ function setStatus(connected) {
     statusDot.className = "w-2 h-2 rounded-full bg-red-500";
     statusText.textContent = "Deconnecte";
     statusText.className = "text-[11px] font-medium text-red-500";
-    chatInput.disabled = true;
-    sendBtn.disabled = true;
+    chatInput.disabled = false;
+    sendBtn.disabled = false;
+  }
+}
+
+function renderTargets(config) {
+  targetsList.innerHTML = "";
+  currentTarget = config.current;
+
+  Object.entries(config.targets).forEach(([key, t]) => {
+    const active = key === config.current;
+
+    const card = document.createElement("div");
+    card.className = `rounded-lg border px-3 py-2.5 cursor-pointer transition ${
+      active ? "border-ios-blue bg-blue-50" : "border-neutral-200 bg-white hover:bg-neutral-100"
+    }`;
+    card.dataset.target = key;
+
+    card.innerHTML = `
+      <div class="flex items-center gap-2">
+        <span class="w-2.5 h-2.5 rounded-full shrink-0 ${active ? "bg-ios-blue" : "bg-neutral-300"}"></span>
+        <span class="text-[13px] font-medium text-neutral-900">${t.label}</span>
+      </div>
+      <a href="${t.url}/api/tags" target="_blank" rel="noopener"
+         class="block mt-1 text-[11px] text-neutral-500 hover:text-ios-blue truncate underline decoration-dotted">
+        ${t.url}
+      </a>
+      <div class="text-[11px] text-neutral-400 mt-0.5">modele: ${t.model}</div>
+    `;
+
+    card.addEventListener("click", () => switchTarget(key));
+    targetsList.appendChild(card);
+  });
+}
+
+async function loadConfig() {
+  try {
+    const res = await fetch("/api/config");
+    const data = await res.json();
+    renderTargets(data);
+  } catch (err) {
+    targetsList.innerHTML = '<div class="text-[12px] text-red-500">Impossible de charger la config</div>';
+  }
+}
+
+async function switchTarget(key) {
+  if (key === currentTarget) return;
+  try {
+    const res = await fetch("/api/config", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ target: key }),
+    });
+    const data = await res.json();
+    currentTarget = data.current;
+    await loadConfig();
+    await pollStatus();
+    testResult.textContent = "";
+  } catch (err) {
+    testResult.textContent = "Erreur lors du changement de cible.";
+    testResult.className = "text-[12px] leading-snug text-red-500";
   }
 }
 
@@ -77,10 +136,30 @@ async function pollStatus() {
     const res = await fetch("/api/status");
     const data = await res.json();
     setStatus(Boolean(data.connected));
+    return data;
   } catch (err) {
     setStatus(false);
+    return null;
   }
 }
+
+testBtn.addEventListener("click", async () => {
+  testResult.textContent = "Test en cours...";
+  testResult.className = "text-[12px] leading-snug text-neutral-400";
+  const data = await pollStatus();
+  if (!data) {
+    testResult.textContent = "Impossible de contacter le backend Flask.";
+    testResult.className = "text-[12px] leading-snug text-red-500";
+    return;
+  }
+  if (data.connected) {
+    testResult.textContent = `OK - ${data.label} repond, modele "${data.model}" pret.`;
+    testResult.className = "text-[12px] leading-snug text-green-600";
+  } else {
+    testResult.textContent = data.error || "Serveur injoignable (raison inconnue).";
+    testResult.className = "text-[12px] leading-snug text-red-500";
+  }
+});
 
 async function sendMessage(message) {
   renderMessage("user", message);
@@ -101,6 +180,7 @@ async function sendMessage(message) {
     removeTyping();
     renderMessage("assistant", data.reply);
     history.push({ role: "assistant", content: data.reply });
+    setStatus(Boolean(data.connected));
   } catch (err) {
     removeTyping();
     renderMessage("assistant", "Erreur de connexion au serveur d'inference.");
@@ -121,5 +201,6 @@ chatForm.addEventListener("submit", (e) => {
 // Message d'accueil
 renderMessage("assistant", "Bonjour, je suis l'assistant financier TechCorp. Comment puis-je vous aider aujourd'hui ?");
 
+loadConfig();
 pollStatus();
 setInterval(pollStatus, 5000);
