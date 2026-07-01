@@ -11,6 +11,7 @@ const testResult = document.getElementById("test-result");
 
 const history = [];
 let currentTarget = null;
+let isSending = false;
 
 function scrollToBottom() {
   chatScroll.scrollTop = chatScroll.scrollHeight;
@@ -132,6 +133,7 @@ async function switchTarget(key) {
 }
 
 async function pollStatus() {
+  if (isSending) return null;
   try {
     const res = await fetch("/api/status");
     const data = await res.json();
@@ -166,6 +168,7 @@ async function sendMessage(message) {
   history.push({ role: "user", content: message });
   renderTyping();
   sendBtn.disabled = true;
+  isSending = true;
 
   try {
     const res = await fetch("/api/chat", {
@@ -186,6 +189,7 @@ async function sendMessage(message) {
     renderMessage("assistant", "Erreur de connexion au serveur d'inference.");
     setStatus(false);
   } finally {
+    isSending = false;
     sendBtn.disabled = false;
   }
 }

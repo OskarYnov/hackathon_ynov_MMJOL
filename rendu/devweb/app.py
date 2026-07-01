@@ -34,7 +34,7 @@ current_target = os.environ.get("OLLAMA_TARGET", "local")
 if current_target not in TARGETS:
     current_target = "local"
 
-OLLAMA_TIMEOUT = 30
+OLLAMA_TIMEOUT = 240
 
 STUB_REPLIES = [
     "D'apres les donnees disponibles, concernant '{q}' il faudrait une analyse plus approfondie des indicateurs de marche.",
@@ -164,4 +164,4 @@ def chat():
 
 
 if __name__ == "__main__":
-    app.run(debug=True, host="0.0.0.0", port=5000)
+    app.run(debug=True, host="0.0.0.0", port=5000, threaded=True)
